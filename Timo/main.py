@@ -22,7 +22,6 @@ def load_data(file_path):
 
 def train_model(train_data):
 
-    access_token = "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"
     model_id = "roberta-base"
 
     
@@ -42,7 +41,7 @@ def train_model(train_data):
     
 
 def tokenize(examples):
-    tokenizer = AutoTokenizer.from_pretrained('roberta-base', use_auth_token='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')
+    tokenizer = AutoTokenizer.from_pretrained('roberta-base'')
     return tokenizer(examples["Conclusion"], padding=True, truncation=True, max_length=256)
 
 def main():

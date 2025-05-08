@@ -5,7 +5,7 @@ def tokenize_function(example):
     return tokenizer(example["sentence1"], example["sentence2"], truncation=True)
 
 # open dataset
-raw_datasets = load_dataset("glue", "mrpc", token = "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")
+raw_datasets = load_dataset("glue", "mrpc")
 
 # Tokenize
 checkpoint = "bert-base-uncased"
