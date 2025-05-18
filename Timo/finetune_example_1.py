@@ -11,12 +11,15 @@ import torch
 def tokenize_function(example):
     return tokenizer(example["sentence1"], example["sentence2"], truncation=True)
 
+
+access_token = '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'
+
 # open dataset
-raw_datasets = load_dataset("glue", "mrpc")
+raw_datasets = load_dataset("glue", "mrpc", token=access_token)
 
 # Tokenize
 checkpoint = "bert-base-uncased"
-tokenizer = AutoTokenizer.from_pretrained(checkpoint)
+tokenizer = AutoTokenizer.from_pretrained(checkpoint, use_auth_token=access_token)
 tokenized_datasets = raw_datasets.map(tokenize_function, batched=True)
 data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
@@ -59,7 +62,7 @@ for epoch in range(num_epochs):
         optimizer.zero_grad()
         progress_bar.update(1)
 
-metric = evaluate.load("glue", "mrpc")
+metric = evaluate.load("glue", "mrpc", token=access_token)
 model.eval()
 for batch in eval_dataloader:
     batch = {k: v.to(device) for k, v in batch.items()}
@@ -74,4 +77,5 @@ x =metric.compute()
 print(x['accuracy'])
 print(x['f1'])
 
+f.close()
 # FileNotFoundError: Couldn't find a module script at C:\Users\Timo\Documents\Langtechproject\LangTechProject\glue\glue.py. Module 'glue' doesn't exist on the Hugging Face Hub either.
