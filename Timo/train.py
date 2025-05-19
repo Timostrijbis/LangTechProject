@@ -93,7 +93,7 @@ def compute_f1_scores(eval_pred):
     print("Per-column F1 scores:", f1_scores)
     print("Overall F1 score:", overall_f1)
 
-    return f1_scores
+    return overall_f1
 
 
 def train_model(tokenized_dataset, tokenizer, access_token, model_path):
@@ -120,8 +120,7 @@ def train_model(tokenized_dataset, tokenizer, access_token, model_path):
         per_device_eval_batch_size=256,
         gradient_accumulation_steps=256,
         gradient_checkpointing=True,
-        bf16=True,
-        optim="adamw_bnb_8bit",
+        optim="adamw_torch_fused",
         dataloader_pin_memory=True,
         dataloader_num_workers=4,
         torch_empty_cache_steps=4,
