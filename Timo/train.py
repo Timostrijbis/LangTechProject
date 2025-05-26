@@ -8,7 +8,6 @@ Usage:
    python main.py
 NOTE: Evaluate is currently not implemented in the code. I will add this later.
 '''
-
 from transformers import AutoTokenizer
 from datasets import load_dataset
 from transformers import DataCollatorWithPadding
@@ -16,7 +15,6 @@ from transformers import AutoModelForSequenceClassification, TrainingArguments, 
 import evaluate
 import numpy as np
 import torch
-
 
 
 def load_own_dataset(access_token):
@@ -43,7 +41,7 @@ def sigmoid(x):
 
 def compute_metrics(eval_pred):
     # compute metrics for the model: accuracy, precision, recall and f1 score. Currently not in use until I figure out how to use evaluate
-    clf_metrics = evaluate.load("f1")
+    clf_metrics = evaluate.load("evaluate/metrics/f1")
     predictions, labels = eval_pred
     predictions = sigmoid(predictions)
     print(predictions.shape)
@@ -68,32 +66,36 @@ def compute_metrics(eval_pred):
 
 def compute_f1_scores(eval_pred):
     num_columns = 20
-    f1_scores = []
-    clf_metrics = evaluate.load("f1")
+    clf_metrics = evaluate.load("evaluate/metrics/f1")
     predictions, labels = eval_pred
 
     # Overall (micro-average) F1 score
-    preds_all = predictions.astype(int).reshape(-1)
-    refs_all = labels.astype(int).reshape(-1)
+    # Ensure binary integer values
+    predictions = predictions.astype(int)
+    labels = labels.astype(int)
+
+    # Overall (micro-average) F1 score
+    preds_all = predictions.reshape(-1)
+    refs_all = labels.reshape(-1)
     overall_f1 = clf_metrics.compute(predictions=preds_all, references=refs_all, average='micro')['f1']
-    f1_scores.append(overall_f1)
 
     # Per-column (binary) F1 scores
+    metrics_dict = {"overall_f1": overall_f1}
     for i in range(num_columns):
-        preds = predictions[:, i].astype(int).reshape(-1)
-        refs = labels[:, i].astype(int).reshape(-1)
-        unique_preds = np.unique(predictions[:, i])
-        unique_refs = np.unique(labels[:, i])
-        print(f"Column {i}: refs={unique_refs}")
+        preds = predictions[:, i].reshape(-1)
+        refs = labels[:, i].reshape(-1)
+        # unique_preds = np.unique(predictions[:, i])
+        # unique_refs = np.unique(labels[:, i])
+        # print(f"Column {i}: refs={unique_refs}")
         score = clf_metrics.compute(predictions=preds, references=refs, average='micro')
-        f1_scores.append(score['f1'])
+        metrics_dict[f"f1_col_{i}"] = score['f1']
 
 
 
-    print("Per-column F1 scores:", f1_scores)
-    print("Overall F1 score:", overall_f1)
+    # print("Per-column F1 scores:", f1_scores)
+    # print("Overall F1 score:", overall_f1)
 
-    return overall_f1
+    return metrics_dict
 
 
 def train_model(tokenized_dataset, tokenizer, access_token, model_path):
@@ -113,19 +115,16 @@ def train_model(tokenized_dataset, tokenizer, access_token, model_path):
         # per_device_eval_batch_size=3,
         num_train_epochs=2,
         weight_decay=0.01,
-        eval_strategy ="epoch",
+        evaluation_strategy ="epoch",
         save_strategy="epoch",
         load_best_model_at_end=True,
         per_device_train_batch_size=256,
         per_device_eval_batch_size=256,
         gradient_accumulation_steps=256,
         gradient_checkpointing=True,
-        optim="adamw_torch_fused",
         dataloader_pin_memory=True,
         dataloader_num_workers=4,
-        torch_empty_cache_steps=4,
-        torch_compile=True,
-        torch_compile_backend="inductor"
+        torch_compile=False,
     )
 
     trainer = Trainer(
