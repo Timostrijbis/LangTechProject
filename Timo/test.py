@@ -21,9 +21,16 @@ import evaluate
 
 
 def load_own_dataset(access_token):
+    # dataset_test = load_dataset("csv", data_files="data/arguments_test.csv", token=access_token, trust_remote_code=True)
+    # dataset_train = load_dataset("csv", data_files="data/arguments_training.csv", token=access_token, trust_remote_code=True)
+    # dataset_val = load_dataset("csv", data_files="data/arguments_validation.csv", token=access_token, trust_remote_code=True)
     dataset = load_dataset('csv', data_files={'train': 'data/arguments_training.csv',
                                               'test': 'data/arguments_test.csv',
                                               'validation': 'data/arguments_validation.csv'},)
+    # print(dataset_test['train'])
+    # print(dataset_train['train'])
+    # print(dataset_val['train'])
+    # return dataset_train['train'], dataset_val['train'], dataset_test['train']
     return dataset
 
 def preprocess_function(example, tokenizer, access_token):
@@ -51,8 +58,7 @@ def tune_thresholds(y_true, y_probs):
         thresholds.append(best_thresh)
     return np.array(thresholds)
 
-def compute_f1_scores(eval_pred, thresholds=None):
-    print("Thresholds:", thresholds) if thresholds is not None else print("No thresholds provided, using default 0.5")
+def compute_f1_scores(eval_pred):
     num_columns = 20
     clf_metrics = evaluate.load("evaluate/metrics/f1")
     logits, labels = eval_pred
@@ -61,11 +67,7 @@ def compute_f1_scores(eval_pred, thresholds=None):
     probs = 1 / (1 + np.exp(-logits))
 
     # Binarize predictions using threshold (e.g., 0.5)
-    if thresholds is not None:
-        predictions = (probs > thresholds).astype(int)
-        print(thresholds)
-    else:
-        predictions = (probs > 0.5).astype(int)
+    predictions = (probs > 0.35).astype(int)
     labels = labels.astype(int)
 
     # Compute overall F1 scores
@@ -95,8 +97,15 @@ def compute_f1_scores(eval_pred, thresholds=None):
         metrics_dict[f"f1_col_{i}"] = score['f1']
 
     # Log some useful information
+    print("Sample predictions:", predictions[:5])
+    print("Sample labels:", labels[:5])
     print("Average predictions per sample:", np.mean(np.sum(predictions, axis=1)))
     print("Average labels per sample:", np.mean(np.sum(labels, axis=1)))
+    print("Predictions shape:", predictions.shape)
+    print("Labels shape:", labels.shape)
+    print("Prob mean/max:", np.mean(probs), np.max(probs))
+    print("Predictions > 0.5:", np.sum(probs > 0.5))
+    print("Logits stats:", np.min(logits), np.max(logits), np.mean(logits))
     print(classification_report(labels.reshape(-1), predictions.reshape(-1)))
     
 
@@ -113,7 +122,7 @@ def train_model(tokenized_dataset, tokenizer, access_token, model_path):
     model = AutoModelForSequenceClassification.from_pretrained(model_path, num_labels=len(classes), id2label=id2class, label2id=class2id, problem_type = "multi_label_classification", use_auth_token=access_token)
 
     training_args = TrainingArguments(
-        output_dir="deberta_v3_large_finetuned",
+        output_dir="deberta_v3_small_finetuned",
         learning_rate=2e-5,
         # per_device_train_batch_size=3,
         # per_device_eval_batch_size=3,
@@ -154,25 +163,11 @@ def train_model(tokenized_dataset, tokenizer, access_token, model_path):
 
     optimal_thresholds = tune_thresholds(val_labels, val_probs)
 
-    # test_preds = (test_probs > optimal_thresholds).astype(int)
-    # print("Optimal thresholds:", optimal_thresholds)
-
-    # test_labels = np.array(tokenized_dataset["test"]["labels"])
-    # print(classification_report(test_labels, test_preds, digits=3))
-
+    test_preds = (test_probs > optimal_thresholds).astype(int)
     print("Optimal thresholds:", optimal_thresholds)
 
-    # Evaluate on the test set using tuned thresholds
-    test_eval_preds = (test_probs > optimal_thresholds).astype(int)
     test_labels = np.array(tokenized_dataset["test"]["labels"])
-
-    # Manually compute the F1 metrics
-    clf_metrics = evaluate.load("evaluate/metrics/f1")
-    micro_f1 = clf_metrics.compute(predictions=test_eval_preds.reshape(-1), references=test_labels.reshape(-1), average='micro')['f1']
-    macro_f1 = clf_metrics.compute(predictions=test_eval_preds.reshape(-1), references=test_labels.reshape(-1), average='macro')['f1']
-    print(f"Test Micro F1: {micro_f1:.4f}")
-    print(f"Test Macro F1: {macro_f1:.4f}")
-    print(classification_report(test_labels, test_eval_preds, target_names=classes, digits=3, zero_division=0))
+    print(classification_report(test_labels, test_preds, digits=3))
 
 def main():
 
@@ -184,10 +179,11 @@ def main():
 
     # Load the dataset
     dataset = load_own_dataset(access_token)
+    print(dataset)
 
     # Change the model here
-    # model_path = 'microsoft/deberta-v3-small'
-    model_path = 'microsoft/deberta-v3-large'
+    model_path = 'microsoft/deberta-v3-small'
+    # model_path = 'microsoft/deberta-v3-large'
 
     # Set the tokenizer
     tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased', use_auth_token=access_token)
@@ -205,15 +201,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-# import pandas as pd
-
-# df_train = pd.read_csv("data/arguments_training.csv")
-# df_test = pd.read_csv("data/arguments_test.csv")
-
-# # Normalize text (e.g., strip and lowercase)
-# train_texts = df_train["Premise"].astype(str).str.lower().str.strip()
-# test_texts = df_test["Premise"].astype(str).str.lower().str.strip()
-
-# overlap = train_texts.isin(test_texts).sum()
-# print(f"Exact overlapping Premises: {overlap} / {len(df_test)} ({overlap / len(df_test) * 100:.2f}%)")
